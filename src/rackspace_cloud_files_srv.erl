@@ -112,6 +112,10 @@ get_auth_token(uk, Username, APIKey) ->
 		_ -> {error, {Code,Content}}
 	end.
 
+%%
+%% Lists all of the containers.
+%% Returns [string|string|string|...]
+%%
 list_containers(State) ->
 	{ok, Code, _Header, Content} = send_authed_query(State, get),
 	
@@ -121,15 +125,156 @@ list_containers(State) ->
 		_ -> {error, Content}
 	end.
 
+%%
+%% Create a container
+%% Returns: ok on sucess
+%%  {error, exists} if the container already exists
+%%  {error, Content} if another error is returned
+%%
+create_container(State, Container) ->
+	create_container(State, Container, []).
+
+%%
+%% Create a container while specifying container metadata
+%% Metadata is of the form [{Key, Value}, {Key, Value}, ...]
+%%
+create_container(State, Container, Metadata) ->
+		{ok, Code, _Header, Content} = send_authed_query(State, "/" ++ Container, create_metadata_headers("X-Container-Meta-", Metadata), put),
+	
+	case list_to_integer(Code) of
+		201 -> ok;
+		202 -> {error, exists};
+		_ -> {error, Content}
+	end.
+
+%%
+%% Delete a container
+%% Returns: ok on success
+%%  {error, does_not_exist} if the container does not exist
+%%  {error, not_empty} if the container is not empty
+%%  error on any other error
+delete_container(State, Container) ->
+	{ok, Code, _Header, _Content} = send_authed_query(State, "/" ++ Container, delete),
+	
+	case list_to_integer(Code) of
+		204 -> ok;
+		404 -> {error, does_not_exist};
+		409 -> {error, not_empty};
+		_ -> error
+	end.
+
+%%
+%% Retrieve the container metadata
+%% Returns: [{Key, Value}, {Key, Value}, ...]
+%%  {error, does_not_exist} if the container does not exist
+%%  error on any other error
+%%
+retrieve_container_metadata(State, Container) ->
+	{ok, Code, Header, _Content} = send_authed_query(State, "/" ++ Container, head),
+	
+	case list_to_integer(Code) of
+		204 -> [{"Object-Count", get_header("X-Container-Object-Count", Header)},
+				{"Bytes-Used", get_header("X-Container-Bytes-Used", Header)} | extract_metadata_headers("X-Container-Meta-", Header)];
+		404 -> {error, does_not_exist};
+		_ -> error
+	end.
+
+%%
+%% Modify the container metadata
+%% Returns: ok on success
+%%  {error, does_not_exist} if the container does not exist
+%%  error on any other error
+%%
+modify_container_metadata(State, Container, Metadata) ->
+	{ok, Code, _Header, Content} = send_authed_query(State, "/" ++ Container, create_metadata_headers("X-Container-Meta-", Metadata), post),
+	
+	case list_to_integer(Code) of
+		204 -> ok;
+		404 -> {error, does_not_exist};
+		_ -> error
+	end.
+
+%%
+%% Retrieves the account metadata
+%% Returns: [{"Container-Count", string}, {"Bytes-Used", string}]
+%%  {error, string} if an error occurs
+%%
+retrieve_account_metadata(State) ->
+	{ok, Code, Header, Content} = send_authed_query(State, head),
+	
+	case list_to_integer(Code) of
+		204 -> [{"Container-Count", get_header("X-Account-Container-Count", Header)},
+				{"Bytes-Used", get_header("X-Account-Bytes-Used", Header)}];
+		_ -> {error, Content}
+	end.
+
+%%
+%% List all objects in a container (plain)
+%% Returns: [string, string, string]
+%%
+list_objects(State, Container) -> list_objects(State, Container, "").
+
+%%
+%% List all objects in a container (xml|json)
+%% Returns: an XML or JSON formatted string object
+%%
+list_objects(State, Container, xml) -> list_objects(State, Container, "xml");
+list_objects(State, Container, json) -> list_objects(State, Container, "json");
+list_objects(State, Container, Format) ->
+	{ok, Code, _Header, Content} = send_authed_query(State, "/" ++ Container ++ "?format=" ++ Format, get),
+	
+	case list_to_integer(Code) of
+		204 -> [];
+		200 -> string:tokens(Content, "\n");
+		_ -> {error, Content}
+	end.
+
+%%
+%% Sends a simple authed query to the server with a passed method
+%%
 send_authed_query(#state{storage_url = URL, token = AuthToken}, Method) ->
 	ibrowse:send_req(URL, [{"X-Auth-Token", AuthToken}], Method).
+
+%%
+%% Sends a simple authed query to the server with a passed method specifying
+%%  extra URL information
+%%
+send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathInfo, Method) ->
+	send_authed_query(State, PathInfo, [], Method).
+
+%%
+%% Sends a simple authed query to the server with a passed method with
+%%  extra URL information and extra headers
+%%
+send_authed_query(#state{storage_url = URL, token = AuthToken}, PathInfo, Headers,  Method) ->
+	ibrowse:send_req(URL ++ PathInfo, [{"X-Auth-Token", AuthToken} | Headers], Method).
 
 %%
 %% Extract a header from a list of items header items
 %% Headers are in the form of [{Header, Value}|HeaderList]
 %%
 get_header(_Header, []) -> undefined;
-get_header(Header, [{Header, Item}|HeaderList]) -> Item;
+get_header(Header, [{Header, Item}|_HeaderList]) -> Item;
 get_header(Header, [_|HeaderList]) ->
 	get_header(Header, HeaderList).
-		
+
+%%
+%% Create a set of metadata headers by prepending "Prefix" to a list of the form
+%%  [{string, string}, {string, string}]
+%% Returns: [{Prefix++string, string}, {Prefix++string, string}]
+%%
+create_metadata_headers(Prefix, Headers) when is_list(Headers) ->
+	[{Prefix ++ Key, Value} || {Key, Value} <- Headers];
+create_metadata_headers(_Prefix, Headers) ->
+	Headers.
+
+%%
+%% Extract the metadata headers from a set of HTTP headers, the prefix will be
+%%  stripped out in the result
+%%
+extract_metadata_headers(_, []) -> [];
+extract_metadata_headers(Prefix, [{Header, Item}|HeaderList]) ->
+	case string:str(Header, Prefix) of
+			1 -> [{string:substr(Header, string:len(Prefix)+1), Item} | extract_metadata_headers(Prefix, HeaderList)];
+			_ -> extract_metadata_headers(Prefix, HeaderList)
+	end.
