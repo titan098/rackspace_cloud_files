@@ -1,0 +1,7 @@
+deps/
+ebin/
+src/*.swp
+rebar
+rebar-tmp/
+.project
+*.swp

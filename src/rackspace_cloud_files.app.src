@@ -1,0 +1,12 @@
+{application, rackspace_cloud_files,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { rackspace_cloud_files, []}},
+  {env, []}
+ ]}.
