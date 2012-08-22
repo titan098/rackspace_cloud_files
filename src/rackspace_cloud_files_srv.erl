@@ -229,6 +229,38 @@ list_objects(State, Container, Format) ->
 		_ -> {error, Content}
 	end.
 
+get_object(State, Container, Object) ->
+	{ok, Code, Header, Content} = send_authed_query(State, "/" ++ Container ++ "/" ++ Object, get),
+
+	case list_to_integer(Code) of
+		200 -> check_return_content(list_to_binary(Content), get_header("Etag", Header));
+		400 -> {error, does_not_exist};
+		_ -> error
+	end.
+
+get_object(State, Container, Object, OutFile) ->
+	case get_object(State, Container, Object) of
+		{content, Content} ->
+			{ok, IODevice} = file:open(OutFile, [write, binary]),
+			file:write(IODevice, Content),
+			file:close(IODevice);
+		{error, Error} -> {error, Error};
+		_ -> error
+	end.
+
+create_object(State, Container, Object, Data, Options) ->
+	Headers = [{"Etag", md5(Data)} | parse_object_options(Options)],
+	io:format("~p~n", [Headers]),
+	{ok, Code, Header, Content} = send_authed_query(State, "/" ++ Container ++ "/" ++ Object, Headers, put, Data),
+
+	case list_to_integer(Code) of
+		201 -> ok;
+		401 -> {error, unauthorised};
+		411 -> {error, length_required};
+		422 -> {error, hash_mismatch};
+		_ -> error
+	end.
+
 %%
 %% Sends a simple authed query to the server with a passed method
 %%
@@ -246,8 +278,11 @@ send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathIn
 %% Sends a simple authed query to the server with a passed method with
 %%  extra URL information and extra headers
 %%
-send_authed_query(#state{storage_url = URL, token = AuthToken}, PathInfo, Headers,  Method) ->
-	ibrowse:send_req(URL ++ PathInfo, [{"X-Auth-Token", AuthToken} | Headers], Method).
+send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathInfo, Headers,  Method) ->
+	send_authed_query(State, PathInfo, Headers, Method, []).
+
+send_authed_query(#state{storage_url = URL, token = AuthToken}, PathInfo, Headers,  Method, Body) ->	
+	ibrowse:send_req(URL ++ PathInfo, [{"X-Auth-Token", AuthToken} | Headers], Method, Body).
 
 %%
 %% Extract a header from a list of items header items
@@ -278,3 +313,34 @@ extract_metadata_headers(Prefix, [{Header, Item}|HeaderList]) ->
 			1 -> [{string:substr(Header, string:len(Prefix)+1), Item} | extract_metadata_headers(Prefix, HeaderList)];
 			_ -> extract_metadata_headers(Prefix, HeaderList)
 	end.
+
+parse_object_options([]) -> [];
+parse_object_options([{Option, Value}|Options]) ->
+	case Option of
+		delete_at -> [{"X-Delete-At", Value} | parse_object_options(Options)];
+		delete_after -> [{"X-Delete-After", Value} | parse_object_options(Options)];
+		_ -> parse_object_options(Options)
+	end.
+
+%%
+%% Validate content with a parsed MD5 hash
+%%  if the content is valid, {content, Content} is returned
+%%  otherwise {error, hash_does_not_match} is returned
+%%
+check_return_content(Content, MD5String) ->
+	case md5(Content) of
+		MD5String -> {content, Content};
+		_ -> {error, hash_does_not_match}
+	end.
+
+%%
+%% MD5 Hex string
+%%
+md5(X) ->
+	string:to_lower(lists:flatten(lists:map(fun hex_char/1, binary_to_list(crypto:md5(X))))).
+
+%%
+%% Generate a padded hex character for a integer input
+%%
+hex_char(X) ->
+	lists:flatten(io_lib:format("~2.16.0B", [X])).
