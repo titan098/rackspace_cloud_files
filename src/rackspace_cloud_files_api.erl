@@ -57,8 +57,8 @@ list_containers(State) ->
 	{ok, Code, _Header, Content} = send_authed_query(State, get),
 	
 	case list_to_integer(Code) of
-		204 -> [];
-		200 -> string:tokens(Content, "\n");
+		204 -> {ok, []};
+		200 -> {ok, string:tokens(Content, "\n")};
 		_ -> {error, Content}
 	end.
 
@@ -110,8 +110,8 @@ retrieve_container_metadata(State, Container) ->
 	{ok, Code, Header, _Content} = send_authed_query(State, "/" ++ Container, head),
 	
 	case list_to_integer(Code) of
-		204 -> [{"Object-Count", get_header("X-Container-Object-Count", Header)},
-				{"Bytes-Used", get_header("X-Container-Bytes-Used", Header)} | extract_metadata_headers("X-Container-Meta-", Header)];
+		204 -> {ok, [{"Object-Count", get_header("X-Container-Object-Count", Header)},
+				{"Bytes-Used", get_header("X-Container-Bytes-Used", Header)} | extract_metadata_headers("X-Container-Meta-", Header)]};
 		404 -> {error, does_not_exist};
 		_ -> error
 	end.
@@ -140,8 +140,8 @@ retrieve_account_metadata(State) ->
 	{ok, Code, Header, Content} = send_authed_query(State, head),
 	
 	case list_to_integer(Code) of
-		204 -> [{"Container-Count", get_header("X-Account-Container-Count", Header)},
-				{"Bytes-Used", get_header("X-Account-Bytes-Used", Header)}];
+		204 -> {ok, [{"Container-Count", get_header("X-Account-Container-Count", Header)},
+				{"Bytes-Used", get_header("X-Account-Bytes-Used", Header)}]};
 		_ -> {error, Content}
 	end.
 
@@ -161,8 +161,8 @@ list_objects(State, Container, Format) ->
 	{ok, Code, _Header, Content} = send_authed_query(State, "/" ++ Container ++ "?format=" ++ Format, get),
 	
 	case list_to_integer(Code) of
-		204 -> [];
-		200 -> string:tokens(Content, "\n");
+		204 -> {ok, []};
+		200 -> {ok, string:tokens(Content, "\n")};
 		_ -> {error, Content}
 	end.
 
@@ -186,10 +186,11 @@ get_object(State, Container, Object) ->
 %%
 get_object(State, Container, Object, OutFile) ->
 	case get_object(State, Container, Object) of
-		{content, Content} ->
+		{ok, Content} ->
 			{ok, IODevice} = file:open(OutFile, [write, binary]),
 			file:write(IODevice, Content),
-			file:close(IODevice);
+			file:close(IODevice),
+			ok;
 		{error, Error} -> {error, Error};
 		_ -> error
 	end.
@@ -299,10 +300,10 @@ retrieve_object_metadata(State, Container, Object) ->
 	{ok, Code, Header, _Content} = send_authed_query(State, "/" ++ Container ++ "/" ++ Object, head),
 	
 	case list_to_integer(Code) of
-		200 -> [{"Content-Length", get_header("Content-Length", Header)},
+		200 -> {ok, [{"Content-Length", get_header("Content-Length", Header)},
 				{"Content-Type", get_header("Content-Type", Header)},
 				{"Last-Modified", get_header("Last-Modified", Header)},
-				{"Hash", get_header("Etag", Header)} | extract_metadata_headers("X-Object-Meta-", Header)];
+				{"Hash", get_header("Etag", Header)} | extract_metadata_headers("X-Object-Meta-", Header)]};
 		404 -> {error, does_not_exist};
 		_ -> error
 	end.
@@ -340,8 +341,8 @@ cdn_list_container(State, Format, Enabled) ->
 	{ok, Code, _Header, Content} = send_authed_cdn_query(State, "?format=" ++ Format ++ "&enabled_only=" ++ Enabled, get),
 	
 	case list_to_integer(Code) of
-		204 -> [];
-		200 -> string:tokens(Content, "\n");
+		204 -> {ok, []};
+		200 -> {ok, string:tokens(Content, "\n")};
 		_ -> {error, Content}
 	end.
 
@@ -355,9 +356,9 @@ cdn_enable(State, Container, TTL, LogRetention) ->
 	
 	case list_to_integer(Code) of
 		Val when (Val =:= 201) or (Val =:= 202) ->
-			[{ssl_url, get_header("X-Cdn-Ssl-Uri", Header)},
+			{ok, [{ssl_url, get_header("X-Cdn-Ssl-Uri", Header)},
 			 {url, get_header("X-Cdn-Uri", Header)},
-			 {streaming_url, get_header("X-Cdn-Streaming-Uri", Header)}];
+			 {streaming_url, get_header("X-Cdn-Streaming-Uri", Header)}]};
 		_ -> {error, Content}
 	end.
 
@@ -370,9 +371,9 @@ cdn_disable(State, Container) ->
 	
 	case list_to_integer(Code) of
 		Val when (Val =:= 201) or (Val =:= 202) ->
-			[{ssl_url, get_header("X-Cdn-Ssl-Uri", Header)},
+			{ok, [{ssl_url, get_header("X-Cdn-Ssl-Uri", Header)},
 			 {url, get_header("X-Cdn-Uri", Header)},
-			 {streaming_url, get_header("X-Cdn-Streaming-Uri", Header)}];
+			 {streaming_url, get_header("X-Cdn-Streaming-Uri", Header)}]};
 		_ -> {error, Content}
 	end.
 
@@ -384,12 +385,12 @@ cdn_retrieve_metadata(State, Container) ->
 	
 	case list_to_integer(Code) of
 		204 ->
-			[{ssl_url, get_header("X-Cdn-Ssl-Uri", Header)},
+			{ok, [{ssl_url, get_header("X-Cdn-Ssl-Uri", Header)},
 			 {url, get_header("X-Cdn-Uri", Header)},
 			 {streaming_url, get_header("X-Cdn-Streaming-Uri", Header)},
 			 {ttl, get_header("X-Ttl", Header)},
 			 {enabled, get_header("X-Cdn-Enabled", Header)},
-			 {log_retention, get_header("X-Log-Retention", Header)}];
+			 {log_retention, get_header("X-Log-Retention", Header)}]};
 		404 -> {error, does_not_exist};
 		_ -> {error, Content}
 	end.
@@ -404,9 +405,9 @@ cdn_update_metadata(State, Container, Enabled, TTL, LogRetention) ->
 	
 	case list_to_integer(Code) of
 		202 ->
-			[{ssl_url, get_header("X-Cdn-Ssl-Uri", Header)},
+			{ok, [{ssl_url, get_header("X-Cdn-Ssl-Uri", Header)},
 			 {url, get_header("X-Cdn-Uri", Header)},
-			 {streaming_url, get_header("X-Cdn-Streaming-Uri", Header)}];
+			 {streaming_url, get_header("X-Cdn-Streaming-Uri", Header)}]};
 		404 -> {error, does_not_exist};
 		_ -> {error, Content}
 	end.
@@ -460,8 +461,8 @@ send_authed_query(#state{storage_url = URL, token = AuthToken}, PathInfo, Header
 %% Sends a simple authed query to the server with a passed method with
 %%  extra URL information and extra headers - CDN methods
 %%
-send_authed_cdn_query(#state{cdn_url = URL, token = AuthToken}, Method) ->
-	ibrowse:send_req(URL, [{"X-Auth-Token", AuthToken}], Method).
+%send_authed_cdn_query(#state{cdn_url = URL, token = AuthToken}, Method) ->
+%	ibrowse:send_req(URL, [{"X-Auth-Token", AuthToken}], Method).
 
 send_authed_cdn_query(#state{cdn_url = _URL, token = _AuthToken} = State, PathInfo, Method) ->
 	send_authed_cdn_query(State, PathInfo, [], Method).
@@ -558,7 +559,7 @@ get_object_options([{Option, _Value}|Options]) ->
 %%
 check_return_content(Content, MD5String) ->
 	case md5(Content) of
-		MD5String -> {content, Content};
+		MD5String -> {ok, Content};
 		_ -> {error, hash_does_not_match}
 	end.
 
