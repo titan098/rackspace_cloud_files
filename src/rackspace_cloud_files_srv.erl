@@ -229,6 +229,12 @@ list_objects(State, Container, Format) ->
 		_ -> {error, Content}
 	end.
 
+%%
+%% Get an object from a container
+%%  the hash returned by Cloudfiles will be verified and the data will be returned to the user
+%% Returns: {content, Content} on success
+%%  {error, ErrorMessage} || error on error.
+%%
 get_object(State, Container, Object) ->
 	{ok, Code, Header, Content} = send_authed_query(State, "/" ++ Container ++ "/" ++ Object, get),
 
@@ -238,6 +244,9 @@ get_object(State, Container, Object) ->
 		_ -> error
 	end.
 
+%%
+%% Get an object and save the contents to a file
+%%
 get_object(State, Container, Object, OutFile) ->
 	case get_object(State, Container, Object) of
 		{content, Content} ->
@@ -248,12 +257,24 @@ get_object(State, Container, Object, OutFile) ->
 		_ -> error
 	end.
 
+%%
+%% Upload an object to a specified container
+%%  the container and the object name number be specified
+%%
 upload_object(State, Container, Object, FileName) ->
 	upload_object(State, Container, Object, FileName, [], []).
 
+%%
+%% Upload an object to a specified container passing any Metadata as required
+%%  the container and the object name number be specified
+%%
 upload_object(State, Container, Object, FileName, Metadata) ->
 	upload_object(State, Container, Object, FileName, Metadata,[]).
 
+%%
+%% Upload an object to a specified container passing any Metadata and options as required
+%%  the container and the object name number be specified
+%%
 upload_object(State, Container, Object, FileName, Metadata, Options) ->
 	case file:read_file(FileName) of
 		{ok, FileData} ->
@@ -262,12 +283,21 @@ upload_object(State, Container, Object, FileName, Metadata, Options) ->
 		_ -> error
 	end.
 
+%%
+%% Create an object with passed binary data
+%% 
 create_object(State, Container, Object, Data) ->
 	create_object(State, Container, Object, Data, [], []).
 
+%%
+%% Create an object with passed binary data and any Metadata
+%%
 create_object(State, Container, Object, Data, Metadata) ->
 	create_object(State, Container, Object, Data, Metadata, []).
 
+%%
+%% Create an object with passed binary data, Metatdata, and any passed options
+%%
 create_object(State, Container, Object, Data, Metadata, Options) ->
 	%get any options that will be passed to ibrowse (chunked etc.)
 	ConnOptions = get_object_options(Options),
@@ -288,23 +318,31 @@ create_object(State, Container, Object, Data, Metadata, Options) ->
 		_ -> error
 	end.
 
+%%
+%% Copy an object from one container to another
+%%
 copy_object(State, SourceContainer, SourceObject, DestinationContainer, DestinationObject) ->
 	Headers = [{"Destination", DestinationContainer ++ "/" ++ DestinationObject}],
 	{ok, Code, _Header, _Content} = send_authed_query(State, "/" ++ SourceContainer ++ "/" ++ SourceObject, Headers, copy),
 
-	io:format("Code: ~p~n", [Code]),
 	case list_to_integer(Code) of
 		201 -> ok;
 		404 -> {error, does_not_exist};
 		_ -> error
 	end.
 
+%%
+%% Move an object from one container to another
+%%
 move_object(State, SourceContainer, SourceObject, DestinationContainer, DestinationObject) ->
 	case copy_object(State, SourceContainer, SourceObject, DestinationContainer, DestinationObject) of
 		ok -> delete_object(State, SourceContainer, SourceObject);
 		_ -> error
 	end.
 
+%%
+%% delete an object from a container
+%%
 delete_object(State, Container, Object) ->
 	{ok, Code, _Header, _Content} = send_authed_query(State, "/" ++ Container ++ "/" ++ Object, delete),
 
@@ -347,6 +385,10 @@ modify_object_metadata(State, Container, Object, Metadata) ->
 		_ -> error
 	end.
 
+%%
+%% Compress incoming data with zlib:gzip if the compressed options was passed
+%% the passed data is returned if no compression is required
+%%
 compress_object(Data, Options) ->
 	case get_object_option(compressed, Options) of
 		true ->
@@ -411,6 +453,10 @@ extract_metadata_headers(Prefix, [{Header, Item}|HeaderList]) ->
 			_ -> extract_metadata_headers(Prefix, HeaderList)
 	end.
 
+%%
+%% Extract the object headers from a passed set of options
+%% Returns: a list of HTTP headers to be send with a query
+%%
 get_object_headers([]) -> [];
 get_object_headers([{Option, Value}|Options]) ->
 	case Option of
@@ -421,6 +467,9 @@ get_object_headers([{Option, Value}|Options]) ->
 		_ -> get_object_headers(Options)
 	end.
 
+%%
+%% Get the value of an option from a OptionsList
+%%
 get_object_option(Option, OptionsList) ->
 	case lists:keyfind(Option, 1, OptionsList) of
 		{compressed, true} -> true;
@@ -428,6 +477,9 @@ get_object_option(Option, OptionsList) ->
 		_ -> false
 	end.
 
+%%
+%% Get the options with will be passed to ibrowse
+%%
 get_object_options([]) -> [];
 get_object_options([{Option, _Value}|Options]) ->
 	case Option of
