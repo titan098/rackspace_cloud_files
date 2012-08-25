@@ -1,6 +1,27 @@
-%% Author: david
-%% Created: Aug 25, 2012
-%% Description: TODO: Add description to rackspace_cloud_files_api
+%%% -------------------------------------------------------------------
+%%% Author  : David Ellefsen
+%%% Description : This module contains all of the functions required to
+%%%  interact with the Rackspace Cloud Files API - if this module is used
+%%%  directly, state information must be passed to each function as it is used
+%%% Licence: Apache 2.0 License
+%%%
+%%% Created : Aug 25, 2012
+%%% -------------------------------------------------------------------
+%
+%   Copyright 2012 David Ellefsen
+%
+%   Licensed under the Apache License, Version 2.0 (the "License");
+%   you may not use this file except in compliance with the License.
+%   You may obtain a copy of the License at
+%
+%      http://www.apache.org/licenses/LICENSE-2.0
+%
+%   Unless required by applicable law or agreed to in writing, software
+%   distributed under the License is distributed on an "AS IS" BASIS,
+%   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%   See the License for the specific language governing permissions and
+%   limitations under the License.
+%
 -module(rackspace_cloud_files_api).
 
 %%
@@ -442,8 +463,8 @@ cdn_purge_object(State, Container, Object, PurgeEmail) ->
 %% Sends a simple authed query to the server with a passed method with
 %%  extra URL information and extra headers
 %%
-send_authed_query(#state{storage_url = URL, token = AuthToken}, Method) ->
-	ibrowse:send_req(URL, [{"X-Auth-Token", AuthToken}], Method).
+send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, Method) ->
+	ibrowse:send_req(State, "", Method).
 
 send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathInfo, Method) ->
 	send_authed_query(State, PathInfo, [], Method).
@@ -454,6 +475,9 @@ send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathIn
 send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathInfo, Headers,  Method, Body) ->
 	send_authed_query(State, PathInfo, Headers, Method, Body, []).
 
+send_authed_query(#state{storage_url = undefined}, _PathInfo, _Headers, _Method, _Body, _Options) ->	  
+	{ok, 403, [], "Not Authorised"};
+
 send_authed_query(#state{storage_url = URL, token = AuthToken}, PathInfo, Headers,  Method, Body, Options) ->	  
 	ibrowse:send_req(URL ++ PathInfo, [{"X-Auth-Token", AuthToken} | Headers], Method, Body, Options).
 
@@ -461,9 +485,6 @@ send_authed_query(#state{storage_url = URL, token = AuthToken}, PathInfo, Header
 %% Sends a simple authed query to the server with a passed method with
 %%  extra URL information and extra headers - CDN methods
 %%
-%send_authed_cdn_query(#state{cdn_url = URL, token = AuthToken}, Method) ->
-%	ibrowse:send_req(URL, [{"X-Auth-Token", AuthToken}], Method).
-
 send_authed_cdn_query(#state{cdn_url = _URL, token = _AuthToken} = State, PathInfo, Method) ->
 	send_authed_cdn_query(State, PathInfo, [], Method).
 
@@ -472,6 +493,9 @@ send_authed_cdn_query(#state{cdn_url = _URL, token = _AuthToken} = State, PathIn
 
 send_authed_cdn_query(#state{cdn_url = _URL, token = _AuthToken} = State, PathInfo, Headers,  Method, Body) ->
 	send_authed_cdn_query(State, PathInfo, Headers, Method, Body, []).
+
+send_authed_cdn_query(#state{cdn_url = undefined}, _PathInfo, _Headers, _Method, _Body, _Options) ->	  
+	{ok, 403, [], "Not Authorised"};
 
 send_authed_cdn_query(#state{cdn_url = URL, token = AuthToken}, PathInfo, Headers,  Method, Body, Options) ->	  
 	ibrowse:send_req(URL ++ PathInfo, [{"X-Auth-Token", AuthToken} | Headers], Method, Body, Options).
