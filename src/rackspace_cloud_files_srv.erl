@@ -112,6 +112,10 @@ get_auth_token(uk, Username, APIKey) ->
 		_ -> {error, {Code,Content}}
 	end.
 
+%% --------------------------------------------------------------------
+%% Normal Cloudfiles Functions
+%% --------------------------------------------------------------------
+
 %%
 %% Lists all of the containers.
 %% Returns [string|string|string|...]
@@ -385,6 +389,159 @@ modify_object_metadata(State, Container, Object, Metadata) ->
 		_ -> error
 	end.
 
+%% --------------------------------------------------------------------
+%% CDN Functions
+%% --------------------------------------------------------------------
+
+%%
+%% Get a list of CDN container
+%% A format can be specified and the enabled status of the containers
+%%
+cdn_list_container(State) ->
+	cdn_list_container(State, "plain", "false").
+cdn_list_container(State, Enabled) ->
+	cdn_list_container(State, "plain", Enabled).
+cdn_list_container(State, xml, Enabled) -> cdn_list_container(State, "xml", Enabled);
+cdn_list_container(State, json, Enabled) -> cdn_list_container(State, "json", Enabled);
+cdn_list_container(State, Format, Enabled) ->
+	{ok, Code, _Header, Content} = send_authed_cdn_query(State, "?format=" ++ Format ++ "&enabled_only=" ++ Enabled, get),
+	
+	case list_to_integer(Code) of
+		204 -> [];
+		200 -> string:tokens(Content, "\n");
+		_ -> {error, Content}
+	end.
+
+%%
+%% Enable a container on the CDN
+%% A TTL and a LogRetention flag can be specified
+%%
+cdn_enable(State, Container, TTL, LogRetention) ->
+	Headers = [{"X-TTL", TTL}, {"X-Cdn-Enabled", "True"}, {"X-Log-Retention", LogRetention}],
+	{ok, Code, Header, Content} = send_authed_cdn_query(State, "/" ++ Container, Headers, put),
+	
+	case list_to_integer(Code) of
+		Val when (Val =:= 201) or (Val =:= 202) ->
+			[{ssl_url, get_header("X-Cdn-Ssl-Uri", Header)},
+			 {url, get_header("X-Cdn-Uri", Header)},
+			 {streaming_url, get_header("X-Cdn-Streaming-Uri", Header)}];
+		_ -> {error, Content}
+	end.
+
+%%
+%% Disable a Container on the CDN
+%%
+cdn_disable(State, Container) ->
+	Headers = [{"X-CDN-Enabled", "False"}],
+	{ok, Code, Header, Content} = send_authed_cdn_query(State, "/" ++ Container, Headers, put),
+	
+	case list_to_integer(Code) of
+		Val when (Val =:= 201) or (Val =:= 202) ->
+			[{ssl_url, get_header("X-Cdn-Ssl-Uri", Header)},
+			 {url, get_header("X-Cdn-Uri", Header)},
+			 {streaming_url, get_header("X-Cdn-Streaming-Uri", Header)}];
+		_ -> {error, Content}
+	end.
+
+%%
+%% Return the Metadata for a container on the CDN
+%%
+cdn_retrieve_metadata(State, Container) ->
+	{ok, Code, Header, Content} = send_authed_cdn_query(State, "/" ++ Container, head),
+	
+	case list_to_integer(Code) of
+		204 ->
+			[{ssl_url, get_header("X-Cdn-Ssl-Uri", Header)},
+			 {url, get_header("X-Cdn-Uri", Header)},
+			 {streaming_url, get_header("X-Cdn-Streaming-Uri", Header)},
+			 {ttl, get_header("X-Ttl", Header)},
+			 {enabled, get_header("X-Cdn-Enabled", Header)},
+			 {log_retention, get_header("X-Log-Retention", Header)}];
+		404 -> {error, does_not_exist};
+		_ -> {error, Content}
+	end.
+
+%%
+%% Update the Metadata for an object on the CDN
+%%  The Enabled flag, TTL, and the LogRetention flag must be specified
+%%
+cdn_update_metadata(State, Container, Enabled, TTL, LogRetention) ->
+	Headers = [{"X-TTL", TTL}, {"X-Cdn-Enabled", Enabled}, {"X-Log-Retention", LogRetention}],
+	{ok, Code, Header, Content} = send_authed_cdn_query(State, "/" ++ Container, Headers, post),
+	
+	case list_to_integer(Code) of
+		202 ->
+			[{ssl_url, get_header("X-Cdn-Ssl-Uri", Header)},
+			 {url, get_header("X-Cdn-Uri", Header)},
+			 {streaming_url, get_header("X-Cdn-Streaming-Uri", Header)}];
+		404 -> {error, does_not_exist};
+		_ -> {error, Content}
+	end.
+
+%%
+%% Purge an object from the CDN
+%%
+cdn_purge_object(State, Container, Object) ->
+	cdn_purge_object(State, Container, Object, "").
+
+%%
+%% Purge an object from the CDN
+%%  An email address can be specified in the form of "email1, email2"
+%%
+cdn_purge_object(State, Container, Object, PurgeEmail) ->
+	Headers = [{"X-Purge-Email", PurgeEmail}],
+	{ok, Code, _Header, Content} = send_authed_cdn_query(State, "/" ++ Container ++ "/" ++ Object, Headers, delete),
+	
+	case list_to_integer(Code) of
+		204 -> ok;
+		403 -> {error, not_authorised};
+		404 -> {error, does_not_exist};
+		498 -> {error, rate_limit};
+		_ -> {error, Content}
+	end.
+
+%% --------------------------------------------------------------------
+%% General Functions
+%% --------------------------------------------------------------------
+
+%%
+%% Sends a simple authed query to the server with a passed method with
+%%  extra URL information and extra headers
+%%
+send_authed_query(#state{storage_url = URL, token = AuthToken}, Method) ->
+	ibrowse:send_req(URL, [{"X-Auth-Token", AuthToken}], Method).
+
+send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathInfo, Method) ->
+	send_authed_query(State, PathInfo, [], Method).
+
+send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathInfo, Headers,  Method) ->
+	send_authed_query(State, PathInfo, Headers, Method, []).
+
+send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathInfo, Headers,  Method, Body) ->
+	send_authed_query(State, PathInfo, Headers, Method, Body, []).
+
+send_authed_query(#state{storage_url = URL, token = AuthToken}, PathInfo, Headers,  Method, Body, Options) ->	  
+	ibrowse:send_req(URL ++ PathInfo, [{"X-Auth-Token", AuthToken} | Headers], Method, Body, Options).
+
+%%
+%% Sends a simple authed query to the server with a passed method with
+%%  extra URL information and extra headers - CDN methods
+%%
+send_authed_cdn_query(#state{cdn_url = URL, token = AuthToken}, Method) ->
+	ibrowse:send_req(URL, [{"X-Auth-Token", AuthToken}], Method).
+
+send_authed_cdn_query(#state{cdn_url = _URL, token = _AuthToken} = State, PathInfo, Method) ->
+	send_authed_cdn_query(State, PathInfo, [], Method).
+
+send_authed_cdn_query(#state{cdn_url = _URL, token = _AuthToken} = State, PathInfo, Headers,  Method) ->
+	send_authed_cdn_query(State, PathInfo, Headers, Method, []).
+
+send_authed_cdn_query(#state{cdn_url = _URL, token = _AuthToken} = State, PathInfo, Headers,  Method, Body) ->
+	send_authed_cdn_query(State, PathInfo, Headers, Method, Body, []).
+
+send_authed_cdn_query(#state{cdn_url = URL, token = AuthToken}, PathInfo, Headers,  Method, Body, Options) ->	  
+	ibrowse:send_req(URL ++ PathInfo, [{"X-Auth-Token", AuthToken} | Headers], Method, Body, Options).
+
 %%
 %% Compress incoming data with zlib:gzip if the compressed options was passed
 %% the passed data is returned if no compression is required
@@ -396,32 +553,6 @@ compress_object(Data, Options) ->
 		_ ->
 			Data
 	end.
-
-%%
-%% Sends a simple authed query to the server with a passed method
-%%
-send_authed_query(#state{storage_url = URL, token = AuthToken}, Method) ->
-	ibrowse:send_req(URL, [{"X-Auth-Token", AuthToken}], Method).
-
-%%
-%% Sends a simple authed query to the server with a passed method specifying
-%%  extra URL information
-%%
-send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathInfo, Method) ->
-	send_authed_query(State, PathInfo, [], Method).
-
-%%
-%% Sends a simple authed query to the server with a passed method with
-%%  extra URL information and extra headers
-%%
-send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathInfo, Headers,  Method) ->
-	send_authed_query(State, PathInfo, Headers, Method, []).
-
-send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathInfo, Headers,  Method, Body) ->
-	send_authed_query(State, PathInfo, Headers, Method, Body, []).
-
-send_authed_query(#state{storage_url = URL, token = AuthToken}, PathInfo, Headers,  Method, Body, Options) ->	  
-	ibrowse:send_req(URL ++ PathInfo, [{"X-Auth-Token", AuthToken} | Headers], Method, Body, Options).
 
 %%
 %% Extract a header from a list of items header items
