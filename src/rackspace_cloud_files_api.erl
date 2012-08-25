@@ -266,7 +266,6 @@ create_object(State, Container, Object, Data, Metadata, Options) ->
 	
 	%calculate an MD5 hash of the object and append any headers (metadata) etc.
 	Headers = [{"Etag", md5(NewData)}] ++ get_object_headers(Options) ++ create_metadata_headers("X-Object-Meta-", Metadata),
-	io:format("~p~n", [Headers]),
 	{ok, Code, _Header, _Content} = send_authed_query(State, "/" ++ Container ++ "/" ++ Object, Headers, put, NewData, ConnOptions),
 
 	case list_to_integer(Code) of
@@ -464,7 +463,7 @@ cdn_purge_object(State, Container, Object, PurgeEmail) ->
 %%  extra URL information and extra headers
 %%
 send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, Method) ->
-	ibrowse:send_req(State, "", Method).
+	send_authed_query(State, [], [], Method, [], []).
 
 send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathInfo, Method) ->
 	send_authed_query(State, PathInfo, [], Method).
@@ -478,7 +477,7 @@ send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathIn
 send_authed_query(#state{storage_url = undefined}, _PathInfo, _Headers, _Method, _Body, _Options) ->	  
 	{ok, 403, [], "Not Authorised"};
 
-send_authed_query(#state{storage_url = URL, token = AuthToken}, PathInfo, Headers,  Method, Body, Options) ->	  
+send_authed_query(#state{storage_url = URL, token = AuthToken}, PathInfo, Headers,  Method, Body, Options) ->
 	ibrowse:send_req(URL ++ PathInfo, [{"X-Auth-Token", AuthToken} | Headers], Method, Body, Options).
 
 %%
