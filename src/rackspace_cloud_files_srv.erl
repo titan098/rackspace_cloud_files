@@ -186,7 +186,7 @@ retrieve_container_metadata(State, Container) ->
 %%  error on any other error
 %%
 modify_container_metadata(State, Container, Metadata) ->
-	{ok, Code, _Header, Content} = send_authed_query(State, "/" ++ Container, create_metadata_headers("X-Container-Meta-", Metadata), post),
+	{ok, Code, _Header, _Content} = send_authed_query(State, "/" ++ Container, create_metadata_headers("X-Container-Meta-", Metadata), post),
 	
 	case list_to_integer(Code) of
 		204 -> ok;
@@ -248,10 +248,37 @@ get_object(State, Container, Object, OutFile) ->
 		_ -> error
 	end.
 
-create_object(State, Container, Object, Data, Options) ->
-	Headers = [{"Etag", md5(Data)} | parse_object_options(Options)],
+upload_object(State, Container, Object, FileName) ->
+	upload_object(State, Container, Object, FileName, [], []).
+
+upload_object(State, Container, Object, FileName, Metadata) ->
+	upload_object(State, Container, Object, FileName, Metadata,[]).
+
+upload_object(State, Container, Object, FileName, Metadata, Options) ->
+	case file:read_file(FileName) of
+		{ok, FileData} ->
+			create_object(State, Container, Object, FileData, Metadata, Options);
+		{error, ErrorMessage} -> {error, ErrorMessage};
+		_ -> error
+	end.
+
+create_object(State, Container, Object, Data) ->
+	create_object(State, Container, Object, Data, [], []).
+
+create_object(State, Container, Object, Data, Metadata) ->
+	create_object(State, Container, Object, Data, Metadata, []).
+
+create_object(State, Container, Object, Data, Metadata, Options) ->
+	%get any options that will be passed to ibrowse (chunked etc.)
+	ConnOptions = get_object_options(Options),
+	
+	% Compress the object if required
+	NewData = compress_object(Data, Options),
+	
+	%calculate an MD5 hash of the object and append any headers (metadata) etc.
+	Headers = [{"Etag", md5(NewData)}] ++ get_object_headers(Options) ++ create_metadata_headers("X-Object-Meta-", Metadata),
 	io:format("~p~n", [Headers]),
-	{ok, Code, Header, Content} = send_authed_query(State, "/" ++ Container ++ "/" ++ Object, Headers, put, Data),
+	{ok, Code, _Header, _Content} = send_authed_query(State, "/" ++ Container ++ "/" ++ Object, Headers, put, NewData, ConnOptions),
 
 	case list_to_integer(Code) of
 		201 -> ok;
@@ -259,6 +286,73 @@ create_object(State, Container, Object, Data, Options) ->
 		411 -> {error, length_required};
 		422 -> {error, hash_mismatch};
 		_ -> error
+	end.
+
+copy_object(State, SourceContainer, SourceObject, DestinationContainer, DestinationObject) ->
+	Headers = [{"Destination", DestinationContainer ++ "/" ++ DestinationObject}],
+	{ok, Code, _Header, _Content} = send_authed_query(State, "/" ++ SourceContainer ++ "/" ++ SourceObject, Headers, copy),
+
+	io:format("Code: ~p~n", [Code]),
+	case list_to_integer(Code) of
+		201 -> ok;
+		404 -> {error, does_not_exist};
+		_ -> error
+	end.
+
+move_object(State, SourceContainer, SourceObject, DestinationContainer, DestinationObject) ->
+	case copy_object(State, SourceContainer, SourceObject, DestinationContainer, DestinationObject) of
+		ok -> delete_object(State, SourceContainer, SourceObject);
+		_ -> error
+	end.
+
+delete_object(State, Container, Object) ->
+	{ok, Code, _Header, _Content} = send_authed_query(State, "/" ++ Container ++ "/" ++ Object, delete),
+
+	case list_to_integer(Code) of
+		204 -> ok;
+		404 -> {error, does_not_exist};
+		_ -> error
+	end.
+
+%%
+%% Retrieve the object metadata
+%% Returns: [{Key, Value}, {Key, Value}, ...]
+%%  {error, does_not_exist} if the object does not exist
+%%  error on any other error
+%%
+retrieve_object_metadata(State, Container, Object) ->
+	{ok, Code, Header, _Content} = send_authed_query(State, "/" ++ Container ++ "/" ++ Object, head),
+	
+	case list_to_integer(Code) of
+		200 -> [{"Content-Length", get_header("Content-Length", Header)},
+				{"Content-Type", get_header("Content-Type", Header)},
+				{"Last-Modified", get_header("Last-Modified", Header)},
+				{"Hash", get_header("Etag", Header)} | extract_metadata_headers("X-Object-Meta-", Header)];
+		404 -> {error, does_not_exist};
+		_ -> error
+	end.
+
+%%
+%% Modify the object metadata
+%% Returns: ok on success
+%%  {error, does_not_exist} if the object does not exist
+%%  error on any other error
+%%
+modify_object_metadata(State, Container, Object, Metadata) ->
+	{ok, Code, _Header, _Content} = send_authed_query(State, "/" ++ Container ++ "/" ++ Object, create_metadata_headers("X-Object-Meta-", Metadata), post),
+	
+	case list_to_integer(Code) of
+		202 -> ok;
+		404 -> {error, does_not_exist};
+		_ -> error
+	end.
+
+compress_object(Data, Options) ->
+	case get_object_option(compressed, Options) of
+		true ->
+			zlib:gzip(Data);
+		_ ->
+			Data
 	end.
 
 %%
@@ -281,8 +375,11 @@ send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathIn
 send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathInfo, Headers,  Method) ->
 	send_authed_query(State, PathInfo, Headers, Method, []).
 
-send_authed_query(#state{storage_url = URL, token = AuthToken}, PathInfo, Headers,  Method, Body) ->	
-	ibrowse:send_req(URL ++ PathInfo, [{"X-Auth-Token", AuthToken} | Headers], Method, Body).
+send_authed_query(#state{storage_url = _URL, token = _AuthToken} = State, PathInfo, Headers,  Method, Body) ->
+	send_authed_query(State, PathInfo, Headers, Method, Body, []).
+
+send_authed_query(#state{storage_url = URL, token = AuthToken}, PathInfo, Headers,  Method, Body, Options) ->	  
+	ibrowse:send_req(URL ++ PathInfo, [{"X-Auth-Token", AuthToken} | Headers], Method, Body, Options).
 
 %%
 %% Extract a header from a list of items header items
@@ -314,12 +411,28 @@ extract_metadata_headers(Prefix, [{Header, Item}|HeaderList]) ->
 			_ -> extract_metadata_headers(Prefix, HeaderList)
 	end.
 
-parse_object_options([]) -> [];
-parse_object_options([{Option, Value}|Options]) ->
+get_object_headers([]) -> [];
+get_object_headers([{Option, Value}|Options]) ->
 	case Option of
-		delete_at -> [{"X-Delete-At", Value} | parse_object_options(Options)];
-		delete_after -> [{"X-Delete-After", Value} | parse_object_options(Options)];
-		_ -> parse_object_options(Options)
+		delete_at -> [{"X-Delete-At", Value} | get_object_headers(Options)];
+		delete_after -> [{"X-Delete-After", Value} | get_object_headers(Options)];
+		compressed -> [{"Content-Encoding", "gzip"} | get_object_headers(Options)];
+		content_type -> [{"Content-Type", Value} | get_object_headers(Options)];
+		_ -> get_object_headers(Options)
+	end.
+
+get_object_option(Option, OptionsList) ->
+	case lists:keyfind(Option, 1, OptionsList) of
+		{compressed, true} -> true;
+		{chunked, true} -> true;
+		_ -> false
+	end.
+
+get_object_options([]) -> [];
+get_object_options([{Option, _Value}|Options]) ->
+	case Option of
+		chunked -> [{transfer_encoding, {chunked, 1024}} | get_object_options(Options)];
+		_ -> get_object_options(Options)
 	end.
 
 %%
