@@ -33,7 +33,7 @@
 %%
 %% Exported Functions
 %%
--export([get_auth_token/3]).
+-export([get_auth_token/1, get_auth_token/3]).
 -export([retrieve_account_metadata/1]).
 -export([list_containers/1, create_container/2, create_container/3, delete_container/2, retrieve_container_metadata/2, modify_container_metadata/3]).
 -export([list_objects/2, list_objects/3, get_object/3, get_object/4, upload_object/4, upload_object/5, upload_object/6, create_object/4, create_object/5, create_object/6]).
@@ -60,11 +60,19 @@ get_auth_token(URL, Username, APIKey) ->
 	{ok, Code, Header, Content} = ibrowse:send_req(URL, [{"X-Auth-User", Username},{"X-Auth-Key", APIKey}], get),
 	
 	case list_to_integer(Code) of
-		Status when (Status >= 200) and (Status < 300) -> {ok, #state{token = get_header("X-Auth-Token", Header),
+		Status when (Status >= 200) and (Status < 300) -> {ok, #state{url = URL,
+																	  username = Username,
+																	  apikey = APIKey,
+																	  token = get_header("X-Auth-Token", Header),
+																	  tokenage = epochSeconds(erlang:universaltime()),
 																	  storage_url = get_header("X-Storage-Url", Header),
 																	  cdn_url = get_header("X-CDN-Management-Url", Header)}};
 		_ -> {error, {Code,Content}}
 	end.
+
+get_auth_token(#state{url = URL, username = Username, apikey = ApiKey}) ->
+	{ok, State} = get_auth_token(URL, Username, ApiKey),
+	State.
 
 %% --------------------------------------------------------------------
 %% Normal Cloudfiles Functions
@@ -595,3 +603,11 @@ md5(X) ->
 %%
 hex_char(X) ->
 	lists:flatten(io_lib:format("~2.16.0B", [X])).
+
+%%
+%% Get the current time expressed as a UNIX timestamp
+%%
+epochSeconds(Time) ->
+	UnixEpoch = calendar:datetime_to_gregorian_seconds({{1970,1,1},{0,0,0}}),
+	LocalDateTime = calendar:datetime_to_gregorian_seconds(Time),
+	LocalDateTime - UnixEpoch.

@@ -30,6 +30,9 @@
 %% --------------------------------------------------------------------
 -include("rackspace_cloud_files.hrl").
 
+% the maximum age of the auth token, will have to reauthenticate ofter this time
+-define(MAXTOKEN, 86400).
+
 %% --------------------------------------------------------------------
 %% External exports
 %% --------------------------------------------------------------------
@@ -93,13 +96,15 @@ handle_call({get_auth_token, Location, Username, APIKey}, _From, _State) ->
 	{reply, Reply, NewState};
 
 handle_call({execute_function, FunctionName, FunctionParams}, _From, State) ->
-	Reply = case erlang:apply(rackspace_cloud_files_api, FunctionName, [State | FunctionParams]) of
+	NewState = checkTokenAge(State),
+	
+	Reply = case erlang:apply(rackspace_cloud_files_api, FunctionName, [NewState | FunctionParams]) of
 				ok -> ok;
 				{ok, OKMessage} -> OKMessage;
 				Other -> Other
 			end,
 	
-	{reply, Reply, State};
+	{reply, Reply, NewState};
 	
 handle_call(destroy_state, _From, _State) ->
 	{reply, ok, #state{}};
@@ -150,3 +155,18 @@ code_change(_OldVsn, State, _Extra) ->
 %% --------------------------------------------------------------------
 %%% Internal functions
 %% --------------------------------------------------------------------
+
+checkTokenAge(#state{tokenage = TokenAge} = State) ->
+	Age = (TokenAge + ?MAXTOKEN) - epochSeconds(erlang:universaltime()),
+	if
+		Age > 0 -> State;
+		true -> rackspace_cloud_files_api:get_auth_token(State)
+	end.
+			  
+%%
+%% Get the current time expressed as a UNIX timestamp
+%%
+epochSeconds(Time) ->
+	UnixEpoch = calendar:datetime_to_gregorian_seconds({{1970,1,1},{0,0,0}}),
+	LocalDateTime = calendar:datetime_to_gregorian_seconds(Time),
+	LocalDateTime - UnixEpoch.

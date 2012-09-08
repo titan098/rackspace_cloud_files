@@ -14,6 +14,7 @@
 %   limitations under the License.
 %
 -record(state, {
+				url = undefined,
 				username = undefined,
 				apikey = undefined,
 				token = undefined,
