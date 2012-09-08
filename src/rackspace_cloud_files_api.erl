@@ -387,13 +387,11 @@ cdn_enable(State, Container, TTL, LogRetention) ->
 %%
 cdn_disable(State, Container) ->
 	Headers = [{"X-CDN-Enabled", "False"}],
-	{ok, Code, Header, Content} = send_authed_cdn_query(State, "/" ++ Container, Headers, put),
+	{ok, Code, _Header, Content} = send_authed_cdn_query(State, "/" ++ Container, Headers, put),
 	
 	case list_to_integer(Code) of
 		Val when (Val =:= 201) or (Val =:= 202) ->
-			{ok, [{ssl_url, get_header("X-Cdn-Ssl-Uri", Header)},
-			 {url, get_header("X-Cdn-Uri", Header)},
-			 {streaming_url, get_header("X-Cdn-Streaming-Uri", Header)}]};
+			{ok, true};
 		_ -> {error, Content}
 	end.
 
