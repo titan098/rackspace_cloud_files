@@ -26,6 +26,7 @@
 -behaviour(application).
 
 -define(RACKSPACE_CLOUDFILE_SRV, rackspace_cloud_files_srv).
+-define(RACKSPACE_TIMEOUT, 60000). % 1 min
 
 %% Application callbacks
 -export([start/0, start/2, stop/1]).
@@ -67,63 +68,63 @@ close() ->
 	rackspace_cloud_files_srv:close().
 
 list_containers() ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, list_containers, []}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, list_containers, []}, ?RACKSPACE_TIMEOUT).
 
 create_container(Container) ->
 	create_container(Container, []).
 create_container(Container, Metadata) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, create_container, [Container, Metadata]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, create_container, [Container, Metadata]}, ?RACKSPACE_TIMEOUT).
 
 delete_container(Container) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, delete_container, [Container]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, delete_container, [Container]}, ?RACKSPACE_TIMEOUT).
 
 retrieve_container_metadata(Container) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, retrieve_container_metadata, [Container]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, retrieve_container_metadata, [Container]}, ?RACKSPACE_TIMEOUT).
 
 modify_container_metadata(Container, Metadata) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, modify_container_metadata, [Container, Metadata]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, modify_container_metadata, [Container, Metadata]}, ?RACKSPACE_TIMEOUT).
 
 retrieve_account_metadata() ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, retrieve_account_metadata, []}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, retrieve_account_metadata, []}, ?RACKSPACE_TIMEOUT).
 
 list_objects(Container) -> list_objects(Container, "").
 list_objects(Container, Format) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, list_objects, [Container, Format]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, list_objects, [Container, Format]}, ?RACKSPACE_TIMEOUT).
 
 get_object(Container, Object) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, get_object, [Container, Object]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, get_object, [Container, Object]}, ?RACKSPACE_TIMEOUT).
 
 get_object(Container, Object, OutFile) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, get_object, [Container, Object, OutFile]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, get_object, [Container, Object, OutFile]}, ?RACKSPACE_TIMEOUT).
 
 upload_object(Container, Object, FileName) ->
 	upload_object(Container, Object, FileName, [], []).
 upload_object(Container, Object, FileName, Metadata) ->
 	upload_object(Container, Object, FileName, Metadata,[]).
 upload_object(Container, Object, FileName, Metadata, Options) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, upload_object, [Container, Object, FileName, Metadata, Options]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, upload_object, [Container, Object, FileName, Metadata, Options]}, ?RACKSPACE_TIMEOUT).
 
 create_object(Container, Object, Data) ->
 	create_object(Container, Object, Data, [], []).
 create_object(Container, Object, Data, Metadata) ->
 	create_object(Container, Object, Data, Metadata, []).
 create_object(Container, Object, Data, Metadata, Options) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, create_object, [Container, Object, Data, Metadata, Options]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, create_object, [Container, Object, Data, Metadata, Options]}, ?RACKSPACE_TIMEOUT).
 
 copy_object(SourceContainer, SourceObject, DestinationContainer, DestinationObject) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, copy_object, [SourceContainer, SourceObject, DestinationContainer, DestinationObject]}).	
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, copy_object, [SourceContainer, SourceObject, DestinationContainer, DestinationObject]}, ?RACKSPACE_TIMEOUT).	
 
 move_object(SourceContainer, SourceObject, DestinationContainer, DestinationObject) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, move_object, [SourceContainer, SourceObject, DestinationContainer, DestinationObject]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, move_object, [SourceContainer, SourceObject, DestinationContainer, DestinationObject]}, ?RACKSPACE_TIMEOUT).
 
 delete_object(Container, Object) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, delete_object, [Container, Object]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, delete_object, [Container, Object]}, ?RACKSPACE_TIMEOUT).
 
 retrieve_object_metadata(Container, Object) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, retrieve_object_metadata, [Container, Object]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, retrieve_object_metadata, [Container, Object]}, ?RACKSPACE_TIMEOUT).
 
 modify_object_metadata(Container, Object, Metadata) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, modify_object_metadata, [Container, Object, Metadata]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, modify_object_metadata, [Container, Object, Metadata]}, ?RACKSPACE_TIMEOUT).
 
 %% --------------------------------------------------------------------
 %% CDN Functions
@@ -134,22 +135,22 @@ cdn_list_container() ->
 cdn_list_container(Enabled) ->
 	cdn_list_container("plain", Enabled).
 cdn_list_container(Format, Enabled) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, cdn_list_container, [Format, Enabled]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, cdn_list_container, [Format, Enabled]}, ?RACKSPACE_TIMEOUT).
 
 cdn_enable(Container, TTL, LogRetention) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, cdn_enable, [Container, TTL, LogRetention]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, cdn_enable, [Container, TTL, LogRetention]}, ?RACKSPACE_TIMEOUT).
 
 cdn_disable(Container) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, cdn_disable, [Container]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, cdn_disable, [Container]}, ?RACKSPACE_TIMEOUT).
 	
 cdn_retrieve_metadata(Container) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, cdn_retrieve_metadata, [Container]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, cdn_retrieve_metadata, [Container]}, ?RACKSPACE_TIMEOUT).
 
 cdn_update_metadata(Container, Enabled, TTL, LogRetention) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, cdn_update_metadata, [Container, Enabled, TTL, LogRetention]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, cdn_update_metadata, [Container, Enabled, TTL, LogRetention]}, ?RACKSPACE_TIMEOUT).
 	
 cdn_purge_object(Container, Object) ->
 	cdn_purge_object(Container, Object, "").
 
 cdn_purge_object(Container, Object, PurgeEmail) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, cdn_purge_object, [Container, Object, PurgeEmail]}).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, cdn_purge_object, [Container, Object, PurgeEmail]}, ?RACKSPACE_TIMEOUT).
