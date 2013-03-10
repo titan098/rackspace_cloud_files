@@ -45,6 +45,8 @@
 -export([cdn_retrieve_metadata/2, cdn_update_metadata/5]).
 -export([cdn_purge_object/3, cdn_purge_object/4]).
 
+-export([tempurl_set_key/2, tempurl_create_url/6]).
+
 %%
 %% API Functions
 %%
@@ -460,6 +462,40 @@ cdn_purge_object(State, Container, Object, PurgeEmail) ->
 		_ -> {error, Content}
 	end.
 
+%%
+%% Set a TempURL key, the key will be valid until it is changed there after it expires after 60 seconds
+%%  The key can be any string 
+%%
+tempurl_set_key(State, Key) when is_list(Key) ->
+		Headers = [{"X-Account-Meta-Temp-Url-Key", Key}],
+		{ok, Code, _Header, Content} = send_authed_query(State, "", Headers, post),
+		
+		case list_to_integer(Code) of
+				X when (X >= 200) and (X =< 299) -> ok;
+				_ -> {error, Content}
+		end.
+
+%%
+%% Create the TempURL for an object
+%% Method should be an atom that is either 'get' or 'put'
+%% Key is the key set with tempurl_setkey/2
+%% Seconds is the number of seconds until the TempURL expires
+%% A string will be return that contains the TempURL
+%%
+%% The tempurl will be of the form:
+%% https://<storage_url>/<version>/<account>/<Container>/<Object>?temp_url_sig=<sha1hmac_sig>&temp_url_expires=<expiretimestamp>
+%%
+tempurl_create_url(State, Method, Container, Object, Seconds, Key) when is_atom(Method) and ((Method == get) or (Method == put)) ->
+	NewMethod = string:to_upper(atom_to_list(Method)),
+	EpochSeconds = epochSeconds(erlang:universaltime())+Seconds,
+	ObjectPath = parse_path(State#state.storage_url) ++ Container ++ "/" ++ Object,
+	Body = NewMethod ++ "\n" ++ integer_to_list(EpochSeconds) ++ "\n" ++ ObjectPath,
+	
+	Hmac = lists:flatten(lists:map(fun hex_char/1, binary_to_list(crypto:hmac(sha, Key, Body)))),
+	State#state.storage_url ++ "/" ++ Container ++ "/" ++ Object ++ "?temp_url_sig=" ++ string:to_lower(Hmac) ++ "&temp_url_expires=" ++ integer_to_list(EpochSeconds);
+tempurl_create_url(_State, _Method, _Container, _Object, _Seconds, _Key) ->
+	{error, unknown_method}.
+
 %% --------------------------------------------------------------------
 %% General Functions
 %% --------------------------------------------------------------------
@@ -591,6 +627,15 @@ check_return_content(Content, MD5String) ->
 		MD5String -> {ok, Content};
 		_ -> {error, hash_does_not_match}
 	end.
+
+%%
+%% Parse a storage URL and return the version and account as the string
+%%  /<Version>/<Account>
+%% The URL will be of the form of: https://<host>/<version>/<account>/
+%%
+parse_path(URL) ->
+		[_Protocol, _Host, Version, Account | _Rest] = string:tokens(URL, "/"),
+		"/" ++ Version ++ "/" ++ Account ++ "/".
 
 %%
 %% MD5 Hex string

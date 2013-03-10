@@ -37,6 +37,7 @@
 -export([list_objects/1, list_objects/2, get_object/2, get_object/3, upload_object/3, upload_object/4, upload_object/5, create_object/3, create_object/4, create_object/5]).
 -export([copy_object/4, move_object/4, delete_object/2]).
 -export([retrieve_object_metadata/2, modify_object_metadata/3]).
+-export([tempurl_set_key/1, tempurl_create_url/5]).
 
 -export([cdn_list_container/0, cdn_list_container/1, cdn_list_container/2]).
 -export([cdn_enable/3, cdn_disable/1]).
@@ -125,6 +126,12 @@ retrieve_object_metadata(Container, Object) ->
 
 modify_object_metadata(Container, Object, Metadata) ->
 	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, modify_object_metadata, [Container, Object, Metadata]}, ?RACKSPACE_TIMEOUT).
+
+tempurl_set_key(Key) ->
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, tempurl_setkey, [Key]}, ?RACKSPACE_TIMEOUT).
+
+tempurl_create_url(Method, Container, Object, Seconds, Key) ->
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, tempurl_createurl, [Method, Container, Object, Seconds, Key]}, ?RACKSPACE_TIMEOUT).
 
 %% --------------------------------------------------------------------
 %% CDN Functions
