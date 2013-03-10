@@ -285,7 +285,7 @@ create_object(State, Container, Object, Data, Metadata, Options) ->
 		401 -> {error, unauthorised};
 		411 -> {error, length_required};
 		422 -> {error, hash_mismatch};
-		_ -> error
+		_ -> {error, Code}
 	end.
 
 %%
@@ -660,6 +660,14 @@ get_object_headers([{Option, Value}|Options]) ->
 		delete_after -> [{"X-Delete-After", Value} | get_object_headers(Options)];
 		compressed -> [{"Content-Encoding", "gzip"} | get_object_headers(Options)];
 		content_type -> [{"Content-Type", Value} | get_object_headers(Options)];
+		ac_allow_credentials -> [{"Access-Control-Allow-Credentials", Value} | get_object_headers(Options)];
+		ac_allow_methods -> [{"Access-Control-Allow-Methods", Value} | get_object_headers(Options)];
+		ac_allow_origin -> [{"Access-Control-Allow-Origin", Value} | get_object_headers(Options)];
+		ac_expose_headers -> [{"Access-Control-Expose-Headers", Value} | get_object_headers(Options)];
+		ac_max_age -> [{"Access-Control-Max-Age", Value} | get_object_headers(Options)];
+		ac_request_headers -> [{"Access-Control-Request-Headers", Value} | get_object_headers(Options)];
+		ac_request_method -> [{"Access-Control-Request-Method", Value} | get_object_headers(Options)];
+		ac_origin -> [{"Origin", Value} | get_object_headers(Options)];
 		_ -> get_object_headers(Options)
 	end.
 
