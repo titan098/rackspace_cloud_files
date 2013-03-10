@@ -38,12 +38,14 @@
 -export([list_containers/1, create_container/2, create_container/3, delete_container/2, retrieve_container_metadata/2, modify_container_metadata/3]).
 -export([list_objects/2, list_objects/3, get_object/3, get_object/4, upload_object/4, upload_object/5, upload_object/6, create_object/4, create_object/5, create_object/6]).
 -export([copy_object/5, move_object/5, delete_object/3]).
--export([retrieve_object_metadata/3, modify_object_metadata/4]).
+-export([modify_object_delete_at/4, modify_object_delete_after/4]).
+-export([retrieve_object_metadata/3, modify_object_metadata/4, retrieve_object_headers/3, modify_object_headers/4]).
 
 -export([cdn_list_container/1, cdn_list_container/2, cdn_list_container/3]).
 -export([cdn_enable/4, cdn_disable/2]).
 -export([cdn_retrieve_metadata/2, cdn_update_metadata/5]).
 -export([cdn_purge_object/3, cdn_purge_object/4]).
+-export([cdn_get_object_url/4]).
 
 -export([tempurl_set_key/2, tempurl_create_url/6]).
 
@@ -339,6 +341,31 @@ retrieve_object_metadata(State, Container, Object) ->
 	end.
 
 %%
+%% Modify the object headers
+%% Headers are in the form of [{Header, Value}, {Header, Value}]
+%%
+modify_object_headers(State, Container, Object, Headers) ->
+	{ok, Code, _Header, _Content} = send_authed_query(State, "/" ++ Container ++ "/" ++ Object, Headers, post),
+	
+	case list_to_integer(Code) of
+		202 -> ok;
+		404 -> {error, does_not_exist};
+		_ -> error
+	end.
+
+%%
+%% Retrieve the raw object headers
+%%
+retrieve_object_headers(State, Container, Object) ->
+	{ok, Code, Header, _Content} = send_authed_query(State, "/" ++ Container ++ "/" ++ Object, head),
+	
+	case list_to_integer(Code) of
+		200 -> {ok, Header};
+		404 -> {error, does_not_exist};
+		_ -> error
+	end.
+
+%%
 %% Modify the object metadata
 %% Returns: ok on success
 %%  {error, does_not_exist} if the object does not exist
@@ -346,6 +373,35 @@ retrieve_object_metadata(State, Container, Object) ->
 %%
 modify_object_metadata(State, Container, Object, Metadata) ->
 	{ok, Code, _Header, _Content} = send_authed_query(State, "/" ++ Container ++ "/" ++ Object, create_metadata_headers("X-Object-Meta-", Metadata), post),
+	
+	case list_to_integer(Code) of
+		202 -> ok;
+		404 -> {error, does_not_exist};
+		_ -> error
+	end.
+
+%%
+%% Modify the amount of time until an existing object is deleted
+%% Seconds is the number of seconds until the object is removed
+%%
+modify_object_delete_after(State, Container, Object, Seconds) ->
+	{ok, Code, _Header, _Content} = send_authed_query(State, "/" ++ Container ++ "/" ++ Object, [{"X-Delete-After", Seconds}], post),
+	
+	case list_to_integer(Code) of
+		202 -> ok;
+		404 -> {error, does_not_exist};
+		_ -> error
+	end.
+
+%%
+%% Modify the time that the object will be deleted
+%% DateTime is a Erlang DateTime term
+%% UnixSeconds is the deletion time as a UNIX timestamp
+%%
+modify_object_delete_at(State, Container, Object, {{_Year,_Mon,_Day}, {_Hour,_Min,_Sec}} = DateTime) ->
+	modify_object_delete_at(State, Container, Object, epochSeconds(DateTime));
+modify_object_delete_at(State, Container, Object, UnixSeconds) when is_integer(UnixSeconds) ->	
+	{ok, Code, _Header, _Content} = send_authed_query(State, "/" ++ Container ++ "/" ++ Object, [{"X-Delete-At", UnixSeconds}], post),
 	
 	case list_to_integer(Code) of
 		202 -> ok;
@@ -461,6 +517,16 @@ cdn_purge_object(State, Container, Object, PurgeEmail) ->
 		498 -> {error, rate_limit};
 		_ -> {error, Content}
 	end.
+
+cdn_get_object_url(State, URLType, Container, Object) ->
+		case cdn_retrieve_metadata(State, Container) of
+			{ok, Metadata} ->
+				case lists:keyfind(URLType, 1, Metadata) of
+					{URLType, URL} -> URL ++ "/" ++ Object;
+					_ -> {error, invalid_url_type}
+				end;
+			_ -> {error, {Container, cdn_not_enabled}}
+		end.
 
 %%
 %% Set a TempURL key, the key will be valid until it is changed there after it expires after 60 seconds

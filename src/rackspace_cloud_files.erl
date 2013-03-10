@@ -36,13 +36,16 @@
 -export([list_containers/0, create_container/1, create_container/2, delete_container/1, retrieve_container_metadata/1, modify_container_metadata/2]).
 -export([list_objects/1, list_objects/2, get_object/2, get_object/3, upload_object/3, upload_object/4, upload_object/5, create_object/3, create_object/4, create_object/5]).
 -export([copy_object/4, move_object/4, delete_object/2]).
+-export([delete_object_at/3, delete_object_after/3]).
 -export([retrieve_object_metadata/2, modify_object_metadata/3]).
+-export([retrieve_object_headers/2, modify_object_headers/3]).
 -export([tempurl_set_key/1, tempurl_create_url/5]).
 
 -export([cdn_list_container/0, cdn_list_container/1, cdn_list_container/2]).
 -export([cdn_enable/3, cdn_disable/1]).
 -export([cdn_retrieve_metadata/1, cdn_update_metadata/4]).
 -export([cdn_purge_object/2, cdn_purge_object/3]).
+-export([cdn_get_object_url/3]).
 
 %%a wrapper to start the application
 start() ->
@@ -127,11 +130,23 @@ retrieve_object_metadata(Container, Object) ->
 modify_object_metadata(Container, Object, Metadata) ->
 	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, modify_object_metadata, [Container, Object, Metadata]}, ?RACKSPACE_TIMEOUT).
 
+retrieve_object_headers(Container, Object) ->
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, retrieve_object_headers, [Container, Object]}, ?RACKSPACE_TIMEOUT).
+
+modify_object_headers(Container, Object, Metadata) ->
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, modify_object_headers, [Container, Object, Metadata]}, ?RACKSPACE_TIMEOUT).
+
+delete_object_at(Container, Object, Time) ->
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, modify_object_delete_at, [Container, Object, Time]}, ?RACKSPACE_TIMEOUT).
+
+delete_object_after(Container, Object, Time) ->
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, modify_object_delete_after, [Container, Object, Time]}, ?RACKSPACE_TIMEOUT).
+
 tempurl_set_key(Key) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, tempurl_setkey, [Key]}, ?RACKSPACE_TIMEOUT).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, tempurl_set_key, [Key]}, ?RACKSPACE_TIMEOUT).
 
 tempurl_create_url(Method, Container, Object, Seconds, Key) ->
-	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, tempurl_createurl, [Method, Container, Object, Seconds, Key]}, ?RACKSPACE_TIMEOUT).
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, tempurl_create_url, [Method, Container, Object, Seconds, Key]}, ?RACKSPACE_TIMEOUT).
 
 %% --------------------------------------------------------------------
 %% CDN Functions
@@ -161,3 +176,6 @@ cdn_purge_object(Container, Object) ->
 
 cdn_purge_object(Container, Object, PurgeEmail) ->
 	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, cdn_purge_object, [Container, Object, PurgeEmail]}, ?RACKSPACE_TIMEOUT).
+
+cdn_get_object_url(URLType, Container, Object) ->
+	gen_server:call(?RACKSPACE_CLOUDFILE_SRV, {execute_function, cdn_get_object_url, [URLType, Container, Object]}, ?RACKSPACE_TIMEOUT).
