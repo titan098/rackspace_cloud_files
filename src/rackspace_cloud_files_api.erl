@@ -57,9 +57,9 @@
 %% Gets the auth tokens from the Rackspace Auth Service
 %%
 get_auth_token(uk, Username, APIKey) ->
-	get_auth_token("https://lon.auth.api.rackspacecloud.com/v1.0", Username, APIKey);
+	get_auth_token("https://lon.identity.api.rackspacecloud.com/v1.0", Username, APIKey);
 get_auth_token(us, Username, APIKey) ->
-	get_auth_token("https://auth.api.rackspacecloud.com/v1.0", Username, APIKey);
+	get_auth_token("https://identity.api.rackspacecloud.com/v1.0", Username, APIKey);
 get_auth_token(URL, Username, APIKey) ->
 	{ok, Code, Header, Content} = ibrowse:send_req(URL, [{"X-Auth-User", Username},{"X-Auth-Key", APIKey}], get),
 	
