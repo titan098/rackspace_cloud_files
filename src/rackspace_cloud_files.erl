@@ -56,6 +56,8 @@ start() ->
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
+	%start ibrowse separately from the main application supervisor
+	ibrowse_sup:start_link(),
     rackspace_cloud_files_sup:start_link().
 
 stop(_State) ->

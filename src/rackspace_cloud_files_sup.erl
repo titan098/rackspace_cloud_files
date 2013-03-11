@@ -45,7 +45,6 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-	IBrowseSup = ?CHILD(ibrowse_sup, supervisor),
 	CloudFilesSrv = ?CHILD(rackspace_cloud_files_srv, worker),
 	
-    {ok, { {one_for_one, 5, 10}, [IBrowseSup, CloudFilesSrv]} }.
+    {ok, { {one_for_one, 5, 10}, [CloudFilesSrv]} }.
