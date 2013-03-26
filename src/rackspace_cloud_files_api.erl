@@ -557,7 +557,7 @@ tempurl_create_url(State, Method, Container, Object, Seconds, Key) when is_atom(
 	ObjectPath = parse_path(State#state.storage_url) ++ Container ++ "/" ++ Object,
 	Body = NewMethod ++ "\n" ++ integer_to_list(EpochSeconds) ++ "\n" ++ ObjectPath,
 	
-	Hmac = lists:flatten(lists:map(fun hex_char/1, binary_to_list(crypto:hmac(sha, Key, Body)))),
+	Hmac = lists:flatten(lists:map(fun hex_char/1, binary_to_list(crypto:sha_mac(Key, Body)))),
 	State#state.storage_url ++ "/" ++ Container ++ "/" ++ Object ++ "?temp_url_sig=" ++ string:to_lower(Hmac) ++ "&temp_url_expires=" ++ integer_to_list(EpochSeconds);
 tempurl_create_url(_State, _Method, _Container, _Object, _Seconds, _Key) ->
 	{error, unknown_method}.
